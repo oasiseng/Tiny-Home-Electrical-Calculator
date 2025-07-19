@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny House Electrical & Solar Calculator</title>
+    <style>
+        :root {
+            --primary-color: #333;
+            --background-color: #f4f4f4;
+            --panel-bg: #d3d3d3;
+            --circuit-bg: #e0e0e0;
+            --highlight-color: #b30000;
+            --button-bg: #333;
+            --button-hover: #555;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background-color: var(--background-color);
+        }
+
+        h1, h2, h3 {
+            color: var(--primary-color);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--circuit-bg);
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--button-hover);
+        }
+
+        .panel-box {
+            border: 2px solid var(--primary-color);
+            padding: 15px;
+            margin-top: 20px;
+            background-color: var(--panel-bg);
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .circuit {
+            width: 45%;
+            padding: 10px;
+            background-color: var(--circuit-bg);
+            border: 1px solid #666;
+            margin-bottom: 10px;
+        }
+
+        .arc-fault, .gfci {
+            background-color: #ffcccc;
+            padding: 5px;
+            font-weight: bold;
+            color: var(--highlight-color);
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .result {
+            margin-top: 20px;
+        }
+
+        .disclaimer {
+            background-color: #ffe6e6;
+            padding: 10px;
+            border: 1px solid var(--highlight-color);
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        input, select {
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Improve contrast for accessibility */
+        :focus {
+            outline: 2px solid #0055cc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tiny House Electrical & Solar Calculator</h1>
+    <div class="disclaimer" role="alert">
+        <strong>Important Safety Notice:</strong> This calculator provides estimates only. Consult a licensed electrician and structural engineer before modifying shipping containers or installing electrical systems. Ensure compliance with NEC 2023 and local building codes. Improper electrical setups can cause fire, injury, or death.
+    </div>
+    <p>Plan your container home’s electrical and solar needs with our realistic panel simulator. Start with a typical setup or customize it!</p>
+
+    <h2>Choose a Typical Setup</h2>
+    <select id="setup" onchange="loadSetup()" aria-label="Select a typical setup">
+        <option value="">Select a setup...</option>
+        <option value="1bed">1 Bedroom</option>
+        <option value="2bed">2 Bedrooms</option>
+        <option value="3bed">3 Bedrooms</option>
+        <option value="4bed">4 Bedrooms</option>
+        <option value="5bed">5 Bedrooms</option>
+    </select>
+
+    <h2>Your Appliances</h2>
+    <table id="applianceTable" aria-label="Appliance input table">
+        <thead>
+            <tr>
+                <th>Appliance Name</th>
+                <th>Power (Watts)</th>
+                <th>Daily Usage (Hours)</th>
+                <th>Circuit Assignment</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Appliances will be loaded here -->
+        </tbody>
+    </table>
+    <button onclick="addAppliance()" aria-label="Add a new appliance">Add Appliance</button>
+    <button onclick="clearTable()" aria-label="Clear appliance table">Clear Table</button>
+    <button onclick="calculate()" aria-label="Calculate electrical and solar needs">Calculate</button>
+
+    <div id="results" class="result" aria-live="polite"></div>
+
+    <script>
+        // Define circuits with realistic names, voltages, and safety requirements
+        const circuits = [
+            { name: "Kitchen Small Appliances 1 (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "Kitchen Small Appliances 2 (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "Laundry (20A)", voltage: 120 },
+            { name: "Bathroom 1 (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "Bathroom 2 (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "Garage (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "Exterior Receptacles (20A, GFCI)", voltage: 120, gfci: true },
+            { name: "General Lighting/Receptacles 1 (15A)", voltage: 120 },
+            { name: "General Lighting/Receptacles 2 (15A)", voltage: 120 },
+            { name: "Dishwasher (15A/20A)", voltage: 120 },
+            { name: "Disposal (15A/20A)", voltage: 120 },
+            { name: "Microwave (20A)", voltage: 120 },
+            { name: "Refrigerator (15A/20A)", voltage: 120 },
+            { name: "Range/Oven (40A-50A, 240V)", voltage: 240 },
+            { name: "Dryer (30A, 240V)", voltage: 240 },
+            { name: "HVAC 1 (30A-60A, 240V)", voltage: 240, warning: "Requires dedicated circuit" },
+            { name: "Water Heater (30A, 240V)", voltage: 240, warning: "Requires dedicated circuit" },
+            { name: "Bedroom 1 (15A, Arc Fault)", voltage: 120, arcFault: true },
+            { name: "Bedroom 2 (15A, Arc Fault)", voltage: 120, arcFault: true },
+            { name: "Bedroom 3 (15A, Arc Fault)", voltage: 120, arcFault: true },
+            { name: "Bedroom 4 (15A, Arc Fault)", voltage: 120, arcFault: true },
+            { name: "Bedroom 5 (15A, Arc Fault)", voltage: 120, arcFault: true }
+        ];
+
+        // Updated typical setups with 2025 realistic values (HomeGuide, EnergyStar)
+        const typicalSetups = {
+            "1bed": [
+                { name: "Kitchen LED Lights", power: 60, usage: 4, circuit: "Kitchen Small Appliances 1 (20A, GFCI)" },
+                { name: "Fridge (EnergyStar)", power: 150, usage: 24, circuit: "Refrigerator (15A/20A)" },
+                { name: "Laptop", power: 65, usage: 3, circuit: "Bedroom 1 (15A, Arc Fault)" },
+                { name: "Ceiling Fan", power: 75, usage: 4, circuit: "General Lighting/Receptacles 1 (15A)" }
+            ],
+            "2bed": [
+                { name: "Kitchen LED Lights", power: 80, usage: 4, circuit: "Kitchen Small Appliances 1 (20A, GFCI)" },
+                { name: "Fridge (EnergyStar)", power: 150, usage: 24, circuit: "Refrigerator (15A/20A)" },
+                { name: "Laptop", power: 65, usage: 3, circuit: "Bedroom 1 (15A, Arc Fault)" },
+                { name: "Ceiling Fan", power: 75, usage: 4, circuit: "General Lighting/Receptacles 1 (15A)" },
+                { name: "Space Heater", power: 1200, usage: 2, circuit: "Bedroom 2 (15A, Arc Fault)" }
+            ],
+            "3bed": [
+                { name: "Kitchen LED Lights", power: 100, usage: 4, circuit: "Kitchen Small Appliances 1 (20A, GFCI)" },
+                { name: "Fridge (EnergyStar)", power: 150, usage: 24, circuit: "Refrigerator (15A/20A)" },
+                { name: "Laptop", power: 65, usage: 3, circuit: "Bedroom 1 (15A, Arc Fault)" },
+                { name: "Ceiling Fan", power: 75, usage: 4, circuit: "General Lighting/Receptacles 1 (15A)" },
+                { name: "Space Heater", power: 1200, usage: 2, circuit: "Bedroom 2 (15A, Arc Fault)" },
+                { name: "Microwave", power: 1100, usage: 0.5, circuit: "Microwave (20A)" }
+            ],
+            "4bed": [
+                { name: "Kitchen LED Lights", power: 120, usage: 4, circuit: "Kitchen Small Appliances 1 (20A, GFCI)" },
+                { name: "Fridge (EnergyStar)", power: 150, usage: 24, circuit: "Refrigerator (15A/20A)" },
+                { name: "Laptop", power: 65, usage: 3, circuit: "Bedroom 1 (15A, Arc Fault)" },
+                { name: "Ceiling Fan", power: 75, usage: 4, circuit: "General Lighting/Receptacles 1 (15A)" },
+                { name: "Space Heater", power: 1200, usage: 2, circuit: "Bedroom 2 (15A, Arc Fault)" },
+                { name: "Microwave", power: 1100, usage: 0.5, circuit: "Microwave (20A)" },
+                { name: "HVAC (Mini-Split)", power: 1800, usage: 4, circuit: "HVAC 1 (30A-60A, 240V)" }
+            ],
+            "5bed": [
+                { name: "Kitchen LED Lights", power: 150, usage: 4, circuit: "Kitchen Small Appliances 1 (20A, GFCI)" },
+                { name: "Fridge (EnergyStar)", power: 150, usage: 24, circuit: "Refrigerator (15A/20A)" },
+                { name: "Laptop", power: 65, usage: 3, circuit: "Bedroom 1 (15A, Arc Fault)" },
+                { name: "Ceiling Fan", power: 75, usage: 4, circuit: "General Lighting/Receptacles 1 (15A)" },
+                { name: "Space Heater", power: 1200, usage: 2, circuit: "Bedroom 2 (15A, Arc Fault)" },
+                { name: "Microwave", power: 1100, usage: 0.5, circuit: "Microwave (20A)" },
+                { name: "HVAC (Mini-Split)", power: 1800, usage: 4, circuit: "HVAC 1 (30A-60A, 240V)" },
+                { name: "Water Heater (Tankless)", power: 2800, usage: 1, circuit: "Water Heater (30A, 240V)" }
+            ]
+        };
+
+        /**
+         * Loads a predefined setup into the appliance table
+         */
+        function loadSetup() {
+            const setup = document.getElementById('setup').value;
+            const table = document.getElementById('applianceTable').getElementsByTagName('tbody')[0];
+            table.innerHTML = '';
+            if (typicalSetups[setup]) {
+                typicalSetups[setup].forEach(app => {
+                    addApplianceRow(app.name, app.power, app.usage, app.circuit);
+                });
+            } else {
+                addApplianceRow(); // Ensure at least one empty row
+            }
+        }
+
+        /**
+         * Adds a new row to the appliance table
+         * @param {string} name - Appliance name
+         * @param {number} power - Power in watts
+         * @param {number} usage - Daily usage in hours
+         * @param {string} circuit - Assigned circuit
+         */
+        function addApplianceRow(name = '', power = 0, usage = 0, circuit = '') {
+            const table = document.getElementById('applianceTable').getElementsByTagName('tbody')[0];
+            const row = table.insertRow();
+            const nameCell = row.insertCell(0);
+            const powerCell = row.insertCell(1);
+            const usageCell = row.insertCell(2);
+            const circuitCell = row.insertCell(3);
+
+            nameCell.innerHTML = `<input type="text" name="name" value="${name}" aria-label="Appliance name">`;
+            powerCell.innerHTML = `<input type="number" name="power" min="0" value="${power}" aria-label="Power in watts" title="Enter power in watts (e.g., 100)">`;
+            usageCell.innerHTML = `<input type="number" name="usage" min="0" step="0.1" value="${usage}" aria-label="Daily usage in hours" title="Enter daily usage in hours (e.g., 4)">`;
+            circuitCell.innerHTML = `
+                <select name="circuit" aria-label="Circuit assignment">
+                    ${circuits.map(c => `<option value="${c.name}" ${c.name === circuit ? 'selected' : ''}>${c.name}${c.warning ? ' (Warning: ' + c.warning + ')' : ''}</option>`).join('')}
+                </select>
+            `;
+        }
+
+        /**
+         * Clears the appliance table and adds an empty row
+         */
+        function clearTable() {
+            const table = document.getElementById('applianceTable').getElementsByTagName('tbody')[0];
+            table.innerHTML = '';
+            addApplianceRow();
+        }
+
+        /**
+         * Validates and collects appliance data, then calculates electrical and solar needs
+         */
+        function calculate() {
+            const appliances = [];
+            const rows = document.getElementById('applianceTable').getElementsByTagName('tbody')[0].rows;
+            for (let row of rows) {
+                const name = row.cells[0].querySelector('input').value;
+                const power = parseFloat(row.cells[1].querySelector('input').value) || 0;
+                const usage = parseFloat(row.cells[2].querySelector('input').value) || 0;
+                const circuit = row.cells[3].querySelector('select').value;
+                if (power <= 0 || usage <= 0) {
+                    alert('Please ensure all appliances have valid power (Watts) and usage (hours) greater than 0.');
+                    return;
+                }
+                appliances.push({ name: name || "Unnamed", power, usage, circuit });
+            }
+
+            if (appliances.length === 0) {
+                alert('Please add at least one appliance with valid power and usage.');
+                return;
+            }
+
+            // Calculate total energy and loads
+            const totalEnergy = appliances.reduce((sum, app) => sum + app.power * app.usage, 0).toFixed(2);
+            const totalConnectedLoad = appliances.reduce((sum, app) => sum + app.power, 0).toFixed(2);
+            const diversityFactor = 0.75; // More conservative for container homes
+            const peakPowerDemand = (totalConnectedLoad * diversityFactor).toFixed(2);
+            const inverterSize = Math.ceil(peakPowerDemand / 100) * 100;
+            const solarHours = 4.5; // Average for USA in 2025
+            const lossFactor = 1.25; // 25% losses for shading, inverter, etc.
+            const requiredSolarWattage = ((totalEnergy / solarHours) * lossFactor).toFixed(2);
+
+            // Group appliances by circuit
+            const circuitGroups = {};
+            appliances.forEach(app => {
+                if (!circuitGroups[app.circuit]) circuitGroups[app.circuit] = [];
+                circuitGroups[app.circuit].push(app);
+            });
+
+            // Calculate breaker sizes
+            const standardBreakers = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200];
+            const circuitResults = {};
+            let total120VPower = 0;
+            let total240VPower = 0;
+            for (let circuitName in circuitGroups) {
+                const circuit = circuits.find(c => c.name === circuitName);
+                if (!circuit) continue;
+                const voltage = circuit.voltage;
+                const totalPower = circuitGroups[circuitName].reduce((sum, app) => sum + app.power, 0);
+                const current = totalPower / voltage;
+                const requiredBreaker = current * 1.25; // NEC 125% safety factor
+                const breakerSize = standardBreakers.find(b => b >= requiredBreaker) || Math.ceil(requiredBreaker / 10) * 10;
+                circuitResults[circuitName] = { voltage, totalPower: totalPower.toFixed(2), breaker: breakerSize, appliances: circuitGroups[circuitName], gfci: circuit.gfci, arcFault: circuit.arcFault };
+                if (voltage === 120) total120VPower += totalPower;
+                else if (voltage === 240) total240VPower += totalPower;
+            }
+
+            // Estimate main breaker size
+            const current120VPerLeg = (total120VPower / 2) / 120;
+            const current240V = total240VPower / 240;
+            const totalCurrentPerLeg = current120VPerLeg + current240V;
+            const mainBreakerAmps = totalCurrentPerLeg * 1.25;
+            const mainBreakerSize = standardBreakers.find(b => b >= mainBreakerAmps) || Math.ceil(mainBreakerAmps / 10) * 10;
+
+            // Estimate costs (2025 averages)
+            const panelCost = mainBreakerSize * 50; // $50/A for panel and breakers
+            const wiringCost = totalConnectedLoad * 0.5; // $0.50/W for wiring
+            const solarCost = requiredSolarWattage * 3; // $3/W for solar panels
+            const inverterCost = inverterSize * 0.8; // $0.80/W for inverter
+            const totalCost = (panelCost + wiringCost + solarCost + inverterCost).toFixed(2);
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <h2>Your Electrical Panel & Solar Estimates</h2>
+                <div class="panel-box">
+                    ${Object.keys(circuitResults).map(circuit => `
+                        <div class="circuit">
+                            <strong>${circuit} (${circuitResults[circuit].voltage}V, Breaker: ${circuitResults[circuit].breaker}A)</strong><br>
+                            Total Power: ${circuitResults[circuit].totalPower} W<br>
+                            ${circuitResults[circuit].arcFault ? '<span class="arc-fault">Arc Fault Protected</span>' : ''}
+                            ${circuitResults[circuit].gfci ? '<span class="gfci">GFCI Protected</span>' : ''}
+                            <ul>
+                                ${circuitResults[circuit].appliances.map(app => `
+                                    <li>${app.name}: ${app.power}W, ${app.usage}h/day (${(app.power * app.usage).toFixed(2)} Wh)</li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>
+                <p><strong>Main Breaker Size: ${mainBreakerSize}A</strong></p>
+                <h3>Energy and Solar Needs</h3>
+                <p><strong>Total Daily Energy Consumption:</strong> ${totalEnergy} Wh</p>
+                <p><strong>Total Connected Load:</strong> ${totalConnectedLoad} W</p>
+                <p><strong>Estimated Peak Power Demand:</strong> ${peakPowerDemand} W (75% diversity factor)</p>
+                <p><strong>Suggested Inverter Size:</strong> ${inverterSize} W</p>
+                <p><strong>Required Solar Panel Wattage:</strong> ${requiredSolarWattage} W (4.5 solar hours/day, 25% losses)</p>
+                <h3>Cost Estimates (2025)</h3>
+                <p><strong>Electrical Panel & Breakers:</strong> $${panelCost.toFixed(2)}</p>
+                <p><strong>Wiring:</strong> $${wiringCost.toFixed(2)}</p>
+                <p><strong>Solar Panels:</strong> $${solarCost.toFixed(2)}</p>
+                <p><strong>Inverter:</strong> $${inverterCost.toFixed(2)}</p>
+                <p><strong>Total Estimated Cost:</strong> $${totalCost}</p>
+                <p><em>Note:</em> Costs are approximate based on 2025 USA averages. Consult professionals for precise quotes.</p>
+                <button onclick="downloadSummary()" aria-label="Download summary as text">Download Summary</button>
+            `;
+        }
+
+        /**
+         * Generates a text summary for download
+         */
+        function downloadSummary() {
+            const resultsDiv = document.getElementById('results');
+            const text = resultsDiv.innerText.replace(/Download Summary/, '').trim();
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'TinyHouseElectricalSummary.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize with an empty row
+        addApplianceRow();
+    </script>
+</body>
+</html>
